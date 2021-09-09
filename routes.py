@@ -4,6 +4,8 @@ from boto3.dynamodb.conditions import Key
 import uvicorn
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import gunicorn
+
 app = FastAPI()
 
 app.add_middleware(
