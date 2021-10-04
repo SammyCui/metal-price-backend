@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import boto3
 from boto3.dynamodb.conditions import Key
 import uvicorn
@@ -9,16 +9,18 @@ import io
 import os
 import boto3
 import pandas as pd
+from starlette.requests import Request
+from starlette.responses import Response
+import redis
 # import dask.dataframe as dd
+import numpy as np
 
 cache_dataset = {}
-
 AWS_S3_BUCKET = 'upload--data'
-AWS_ACCESS_KEY_ID = 'AKIAROQ3A7BEWWFL3FIN'
-AWS_SECRET_ACCESS_KEY = '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'
-AWS_SESSION_TOKEN = '0'
 
 app = FastAPI()
+
+r = redis.Redis(host='localhost', port=6379, db=0)
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,13 +58,11 @@ def get_price_data(requestbody: RequestBody):
     return response['Items']
 
 
-@app.post("/{data_name}/{from_date}_{to_date}")
-async def get_price_data_test(data_name, from_date, to_date):
+async def connect(data_name):
     s3_client = boto3.client(
         "s3",
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-        aws_session_token=AWS_SESSION_TOKEN,
+        aws_access_key_id = 'AKIAROQ3A7BE6D2DCHIM',
+        aws_secret_access_key = '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'
     )
 
     response = s3_client.get_object(Bucket=AWS_S3_BUCKET, Key="deag.csv")
@@ -71,19 +71,52 @@ async def get_price_data_test(data_name, from_date, to_date):
 
     if status == 200:
         print(f"Successful S3 get_object response. Status - {status}")
-        data = await pd.read_csv(response.get("Body"), header = None)
+        data =  pd.read_csv(response.get("Body"), header = None)
         data.columns = ['Datetime', 'price']
         data['Datetime'] = pd.to_datetime(data['Datetime'])
         if data_name not in cache_dataset or (not cache_dataset[data_name]):
             cache_dataset[data_name] = data
 
-        request_data = data.loc[(data['Datetime'] >= from_date) & (data['Datetime'] <= to_date)]
-
-        return request_data
+        return data
     else:
         print(f"Unsuccessful S3 get_object response. Status - {status}")
-        return None
+        raise HTTPException(
+            status_code=404,
+            detail="Item not found",
+        )
+
+async def get_cache(key):
+    return r.get(key)
+
+
+@app.get("/test/cache")
+async def set_cache(key, value):
+    r.set(key, value)
+
+
+
+
+@app.post("/getdata/{data_name}")
+async def get_price_data_test(data_name, from_date, to_date):
+    if data_name not in cache_dataset:
+        data = await connect(data_name)
+        if data is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Item not found",
+            )
+    else:
+        data = cache_dataset[data_name]
+        if data is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Not in cache_dataset: {cache_dataset}",
+            )
+
+    request_data = data.loc[(data['Datetime'] >= from_date) & (data['Datetime'] <= to_date)]
+    json_data = request_data.to_json(orient='records')
+    return json_data
 
 if __name__ == '__main__':
 
-    uvicorn.run(app, port=8000, host='127.0.0.1', log_level="info")
+    uvicorn.run("routes:app", port=8000, host='127.0.0.1', log_level="info", reload = True)

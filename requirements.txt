@@ -4,3 +4,6 @@ boto3
 starlette
 pydantic
 gunicorn
+pandas
+numpy
+redis
