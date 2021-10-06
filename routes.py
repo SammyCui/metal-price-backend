@@ -20,6 +20,12 @@ AWS_S3_BUCKET = 'upload--data'
 
 app = FastAPI()
 
+s3 = None
+
+class Item(BaseModel):
+    key: str
+    value: str
+
 r = redis.Redis(host='localhost', port=6379, db=0)
 
 app.add_middleware(
@@ -58,15 +64,8 @@ def get_price_data(requestbody: RequestBody):
     return response['Items']
 
 
-async def connect(data_name):
-    s3_client = boto3.client(
-        "s3",
-        aws_access_key_id = 'AKIAROQ3A7BE6D2DCHIM',
-        aws_secret_access_key = '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'
-    )
-
-    response = s3_client.get_object(Bucket=AWS_S3_BUCKET, Key="deag.csv")
-
+async def connect(data_name = 'deag.csv'):
+    response = s3.Object(bucket_name = AWS_S3_BUCKET, key = data_name).get()
     status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
 
     if status == 200:
@@ -85,14 +84,14 @@ async def connect(data_name):
             detail="Item not found",
         )
 
+@app.get('/test/cache/get')
 async def get_cache(key):
     return r.get(key)
 
 
-@app.get("/test/cache")
+@app.put("/test/cache/put")
 async def set_cache(key, value):
     r.set(key, value)
-
 
 
 
@@ -114,8 +113,20 @@ async def get_price_data_test(data_name, from_date, to_date):
             )
 
     request_data = data.loc[(data['Datetime'] >= from_date) & (data['Datetime'] <= to_date)]
+    print(request_data)
     json_data = request_data.to_json(orient='records')
+    print(json_data)
     return json_data
+
+@app.get("/get_file_list")
+async def get_s3_file_list():
+    bucket = s3.Bucket(AWS_S3_BUCKET)
+    return [i.key for i in bucket.objects.all()]
+
+@app.on_event("startup")
+async def startup_event():
+    global s3
+    s3 = boto3.resource('s3')
 
 if __name__ == '__main__':
 
