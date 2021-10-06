@@ -117,8 +117,8 @@ async def get_price_data_test(requestbody: RequestBody):
             )
 
     request_data = data.loc[(data['Datetime'] >= from_date) & (data['Datetime'] <= to_date)]
-    print(request_data)
-    json_data = request_data.to_json(orient='records')
+    print(request_data['Datetime'])
+    json_data = request_data.to_json(orient='records', date_unit='s', date_format = 'iso')
     print(json_data)
     return json_data
 
