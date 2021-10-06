@@ -38,30 +38,31 @@ app.add_middleware(
 )
 
 class RequestBody(BaseModel):
-    from_dtime: str
-    to_dtime: str
+    from_date: str
+    to_date: str
+    data_name: str
 
 
-@app.post("/silver")
-def get_price_data(requestbody: RequestBody):
-    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-    table = dynamodb.Table('silver')
-    response = table.query(
-        KeyConditionExpression = (Key('year').eq(int(2015)) | Key('year').eq(int(2016)) | Key('year').eq(int(2017)) | Key('year').eq(int(2018)) | Key('year').eq(int(2019)) |Key('year').eq(int(2020)))
-                                 & Key('dtime').between(requestbody.from_dtime, requestbody.to_dtime)
-    )
+# @app.post("/silver")
+# def get_price_data(requestbody: RequestBody):
+#     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+#     table = dynamodb.Table('silver')
+#     response = table.query(
+#         KeyConditionExpression = (Key('year').eq(int(2015)) | Key('year').eq(int(2016)) | Key('year').eq(int(2017)) | Key('year').eq(int(2018)) | Key('year').eq(int(2019)) |Key('year').eq(int(2020)))
+#                                  & Key('dtime').between(requestbody.from_dtime, requestbody.to_dtime)
+#     )
+#
+#     return response['Items']
 
-    return response['Items']
-
-@app.post("/test/silver", tags = ['test'])
-def get_price_data(requestbody: RequestBody):
-    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-    table = dynamodb.Table('silver')
-    response = table.query(
-        KeyConditionExpression = Key('year').eq(int(2016)) & Key('dtime').between(requestbody.from_dtime, requestbody.to_dtime)
-    )
-
-    return response['Items']
+# @app.post("/test/silver", tags = ['test'])
+# def get_price_data(requestbody: RequestBody):
+#     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+#     table = dynamodb.Table('silver')
+#     response = table.query(
+#         KeyConditionExpression = Key('year').eq(int(2016)) & Key('dtime').between(requestbody.from_dtime, requestbody.to_dtime)
+#     )
+#
+#     return response['Items']
 
 
 async def connect(data_name = 'deag.csv'):
@@ -96,7 +97,10 @@ async def set_cache(key, value):
 
 
 @app.post("/getdata/{data_name}")
-async def get_price_data_test(data_name, from_date, to_date):
+async def get_price_data_test(requestbody: RequestBody):
+    data_name = requestbody.data_name
+    from_date = requestbody.from_date
+    to_date = requestbody.to_date
     if data_name not in cache_dataset:
         data = await connect(data_name)
         if data is None:
